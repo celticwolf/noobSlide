@@ -1,11 +1,14 @@
 /*
 Author:
 	luistar15, <leo020588 [at] gmail.com>
+	Rainer Ilgen <raineri@gmx.net> Extention for Fading
+	
 License:
 	MIT License
  
 Class
 	noobSlide (rev.03-11-10)
+	noobSlide Extention for Fading (rev. 23-10-08)
 
 Arguments:
 	Parameters - see Parameters below
@@ -15,6 +18,7 @@ Parameters:
 	items: dom collection | required
 	size: int | item size (px) | default: 240
 	mode: string | 'horizontal', 'vertical' | default: 'horizontal'
+	fade: boolean | default: false
 	addButtons:{
 		previous: single dom element OR dom collection| default: null
 		next:  single dom element OR dom collection | default: null
@@ -36,6 +40,7 @@ Properties:
 	items: dom collection
 	size: int
 	mode: string
+	fade: boolean
 	buttons: object
 	button_event: string
 	handles: dom collection
@@ -75,6 +80,7 @@ var noobSlide = new Class({
 	initialize: function(params){
 		this.items = params.items;
 		this.mode = params.mode || 'horizontal';
+		this.fade = params.fade || false;
 		this.modes = {horizontal:['left','width'], vertical:['top','height']};
 		this.size = params.size || 240;
 		this.box = params.box.setStyle(this.modes[this.mode][1],(this.size*this.items.length)+'px');
@@ -103,13 +109,44 @@ var noobSlide = new Class({
 				this.addActionButtons(action, $type(params.addButtons[action])=='array' ? params.addButtons[action] : [params.addButtons[action]]);
 			}
 		}
-		this.fx = new Fx.Tween(this.box,$extend((params.fxOptions||{duration:500,wait:false}),{property:this.modes[this.mode][0]}));
-		this.walk((params.startItem||0),true,true);
+		if(this.fade)
+		{
+			//Prepare Fading
+			this.orderItems()
+			this.fading((params.startItem||0),true,true);
+		}
+		else
+		{
+			//original Sliding
+			this.fx = new Fx.Tween(this.box,$extend((params.fxOptions||{duration:500,wait:false}),{property:this.modes[this.mode][0]}));
+			this.walk((params.startItem||0),true,true);
+		}
+	},
+
+	//new function for Ordering the Items for Fading
+	orderItems: function() {
+		for(i=0;i<this.items.length;i++)
+		{
+			this.items[i].setStyle('position', 'absolute')
+			this.items[i].setStyle('left', '0px');
+			this.items[i].setStyle('z-index', i+1);
+			if(i>0)
+			{
+				this.items[i].fade('out');
+			}
+		}
 	},
 
 	addHandleButtons: function(handles){
 		for(var i=0;i<handles.length;i++){
-			handles[i].addEvent(this.handle_event,this.walk.pass([i,true],this));
+			if(this.fade)
+			{
+				handles[i].addEvent(this.handle_event,this.fading.pass([i,true],this));
+			}
+			else
+			{
+				handles[i].addEvent(this.handle_event,this.walk.pass([i,true],this));
+			}
 		}
 	},
 
@@ -127,11 +164,25 @@ var noobSlide = new Class({
 	},
 
 	previous: function(manual){
-		this.walk((this.currentIndex>0 ? this.currentIndex-1 : this.items.length-1),manual);
+		if(this.fade)
+		{
+			this.fading((this.currentIndex>0 ? this.currentIndex-1 : this.items.length-1),manual);
+		}
+		else
+		{
+			this.walk((this.currentIndex>0 ? this.currentIndex-1 : this.items.length-1),manual);
+		}
 	},
 
 	next: function(manual){
-		this.walk((this.currentIndex<this.items.length-1 ? this.currentIndex+1 : 0),manual);
+		if(this.fade)
+		{
+			this.fading((this.currentIndex<this.items.length-1 ? this.currentIndex+1 : 0),manual);
+		}
+		else
+		{
+			this.walk((this.currentIndex<this.items.length-1 ? this.currentIndex+1 : 0),manual);
+		}
 	},
 
 	play: function(interval,direction,wait){
@@ -158,6 +209,29 @@ var noobSlide = new Class({
 				this.fx.cancel().set((this.size*-this.currentIndex)+'px');
 			}else{
 				this.fx.start(this.size*-this.currentIndex);
+			}
+			if(manual && this.autoPlay){
+				this.play(this.interval,'next',true);
+			}
+			if(this.onWalk){
+				this.onWalk((this.items[this.currentIndex] || null), (this.handles && this.handles[this.currentIndex] ? this.handles[this.currentIndex] : null));
+			}
+		}
+	},
+	
+	//Fading
+	fading: function(item,manual,noFx){
+		if(item!=this.currentIndex){
+			this.lastIndex=this.currentIndex;
+			this.currentIndex=item;
+			this.previousIndex = this.currentIndex + (this.currentIndex>0 ? -1 : this.items.length-1);
+			this.nextIndex = this.currentIndex + (this.currentIndex<this.items.length-1 ? 1 : 1-this.items.length);
+			if(manual){
+				this.stop();
+			}
+			if(!noFx){
+				this.items[this.lastIndex].fade('out');
+				this.items[this.currentIndex].fade('in');
 			}
 			if(manual && this.autoPlay){
 				this.play(this.interval,'next',true);
